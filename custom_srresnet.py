@@ -69,7 +69,7 @@ class _NetX2(nn.Module):
         self.conv_input = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=9, stride=1, padding=4, bias=False)
         self.relu = nn.LeakyReLU(0.2, inplace=True)
 
-        self.residual = self.make_layer(_Residual_BlockBottleneck, 8)
+        self.residual = self.make_layer(_Residual_BlockBottleneck, 2)
 
         self.conv_mid = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn_mid = nn.InstanceNorm2d(64, affine=True)

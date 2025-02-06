@@ -33,9 +33,9 @@ valid_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLIS
 
 BATCH_SIZE = 6
 LEARNING_RATE = 1e-4
-EPOCHS = 10
-STEP_DECAY = 200
-SAVE_PATH = "model/srbottle_resnet.pth"
+EPOCHS = 50
+STEP_DECAY = 150  # 200
+SAVE_PATH = f"model/srbottle_resnet-BS{BATCH_SIZE}-EP{EPOCHS}.pth"
 
 class SRDataset(Dataset):
     def __init__(self, lr_folder, hr_folder):
