@@ -23,8 +23,8 @@ os.environ["TORCH_HOME"] = r"torch_cache"
 
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
-train_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/NLHR/X1"))
-train_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/NLHR/X2"))
+train_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X1")) # Train
+train_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X2")) # Train
 valid_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X1"))
 valid_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X2"))
 train_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/LLLR"))
@@ -33,12 +33,12 @@ valid_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLIS
 
 BATCH_SIZE = 4
 LEARNING_RATE = 1e-4
-EPOCHS = 30
-STEP_DECAY = 100  # 200
+EPOCHS = 20
+STEP_DECAY = 150  # 200
 SAVE_PATH = f"model/srbottle_resnet-FT-BS{BATCH_SIZE}-EP{EPOCHS}.pth"
-model_chpoint_path = "model/srbottle_resnet-BS6-EP50.pth"
-num_blocks = 2  # default
-num_channels = 32
+model_chpoint_path = "model/srbottle_resnet-BS4-EP40.pth"
+num_blocks = 1  # 2 default for bottleneck
+num_channels = 64  # 32 was default for bottleneck
 
 class SRDataset(Dataset):
     def __init__(self, lr_folder, hr_folder):

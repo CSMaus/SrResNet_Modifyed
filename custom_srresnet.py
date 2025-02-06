@@ -22,13 +22,13 @@ class _Residual_Block(nn.Module):
 
 
 class _Residual_BlockSmall(nn.Module):
-    def __init__(self):
+    def __init__(self, num_channels):
         super(_Residual_BlockSmall, self).__init__()
 
-        self.conv1 = nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(in_channels=num_channels, out_channels=num_channels, kernel_size=3, stride=1, padding=1, bias=False)
         self.relu = nn.LeakyReLU(0.2, inplace=True)
-        self.conv2 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
-        self.in2 = nn.InstanceNorm2d(64, affine=True)
+        self.conv2 = nn.Conv2d(in_channels=64, out_channels=num_channels, kernel_size=3, stride=1, padding=1, bias=False)
+        self.in2 = nn.InstanceNorm2d(num_channels, affine=True)
 
     def forward(self, x):
         identity_data = x
@@ -42,13 +42,13 @@ class _Residual_BlockBottleneck(nn.Module):
     def __init__(self, num_channels):
         super(_Residual_BlockBottleneck, self).__init__()
 
-        self.conv1x1_reduce = nn.Conv2d(in_channels=64, out_channels=num_channels, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv1x1_reduce = nn.Conv2d(in_channels=num_channels*2, out_channels=num_channels, kernel_size=1, stride=1, padding=0, bias=False)
         self.conv3x3 = nn.Conv2d(in_channels=num_channels, out_channels=num_channels, kernel_size=3, stride=1, padding=1, bias=False)
-        self.conv1x1_expand = nn.Conv2d(in_channels=num_channels, out_channels=64, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv1x1_expand = nn.Conv2d(in_channels=num_channels, out_channels=num_channels*2, kernel_size=1, stride=1, padding=0, bias=False)
 
-        self.bn1 = nn.InstanceNorm2d(num_channels, affine=True)
+        self.bn1 = nn.InstanceNorm2d(num_channels*2, affine=True)
         self.bn2 = nn.InstanceNorm2d(num_channels, affine=True)
-        self.bn3 = nn.InstanceNorm2d(64, affine=True)
+        self.bn3 = nn.InstanceNorm2d(num_channels*2, affine=True)
 
         self.relu = nn.LeakyReLU(0.2, inplace=True)
 
@@ -70,6 +70,7 @@ class _NetX2(nn.Module):
         self.relu = nn.LeakyReLU(0.2, inplace=True)
 
         self.residual = self.make_layer(_Residual_BlockBottleneck, num_blocks, num_channels)
+        self.residual = self.make_layer(_Residual_BlockSmall, num_blocks, 64)
 
         self.conv_mid = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn_mid = nn.InstanceNorm2d(64, affine=True)
