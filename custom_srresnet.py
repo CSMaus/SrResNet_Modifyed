@@ -39,15 +39,15 @@ class _Residual_BlockSmall(nn.Module):
 
 
 class _Residual_BlockBottleneck(nn.Module):
-    def __init__(self):
+    def __init__(self, num_channels):
         super(_Residual_BlockBottleneck, self).__init__()
 
-        self.conv1x1_reduce = nn.Conv2d(in_channels=64, out_channels=32, kernel_size=1, stride=1, padding=0, bias=False)
-        self.conv3x3 = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, stride=1, padding=1, bias=False)
-        self.conv1x1_expand = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv1x1_reduce = nn.Conv2d(in_channels=64, out_channels=num_channels, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv3x3 = nn.Conv2d(in_channels=num_channels, out_channels=num_channels, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1x1_expand = nn.Conv2d(in_channels=num_channels, out_channels=64, kernel_size=1, stride=1, padding=0, bias=False)
 
-        self.bn1 = nn.InstanceNorm2d(32, affine=True)
-        self.bn2 = nn.InstanceNorm2d(32, affine=True)
+        self.bn1 = nn.InstanceNorm2d(num_channels, affine=True)
+        self.bn2 = nn.InstanceNorm2d(num_channels, affine=True)
         self.bn3 = nn.InstanceNorm2d(64, affine=True)
 
         self.relu = nn.LeakyReLU(0.2, inplace=True)
@@ -63,13 +63,13 @@ class _Residual_BlockBottleneck(nn.Module):
 
 
 class _NetX2(nn.Module):
-    def __init__(self):
+    def __init__(self, num_blocks, num_channels):
         super(_NetX2, self).__init__()
 
         self.conv_input = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=9, stride=1, padding=4, bias=False)
         self.relu = nn.LeakyReLU(0.2, inplace=True)
 
-        self.residual = self.make_layer(_Residual_BlockBottleneck, 2)
+        self.residual = self.make_layer(_Residual_BlockBottleneck, num_blocks, num_channels)
 
         self.conv_mid = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn_mid = nn.InstanceNorm2d(64, affine=True)
@@ -89,10 +89,10 @@ class _NetX2(nn.Module):
                 if m.bias is not None:
                     m.bias.data.zero_()
 
-    def make_layer(self, block, num_of_layer):
+    def make_layer(self, block, num_of_layer, num_channels):
         layers = []
         for _ in range(num_of_layer):
-            layers.append(block())
+            layers.append(block(num_channels))
         return nn.Sequential(*layers)
 
     def forward(self, x):

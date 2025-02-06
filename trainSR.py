@@ -31,11 +31,14 @@ train_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLIS
 valid_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/LLLR"))
 
 
-BATCH_SIZE = 6
+BATCH_SIZE = 4
 LEARNING_RATE = 1e-4
-EPOCHS = 50
-STEP_DECAY = 150  # 200
-SAVE_PATH = f"model/srbottle_resnet-BS{BATCH_SIZE}-EP{EPOCHS}.pth"
+EPOCHS = 30
+STEP_DECAY = 100  # 200
+SAVE_PATH = f"model/srbottle_resnet-FT-BS{BATCH_SIZE}-EP{EPOCHS}.pth"
+model_chpoint_path = "model/srbottle_resnet-BS6-EP50.pth"
+num_blocks = 2  # default
+num_channels = 32
 
 class SRDataset(Dataset):
     def __init__(self, lr_folder, hr_folder):
@@ -153,10 +156,15 @@ def train(rank, world_size):
     train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank)# , shuffle=True)
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, sampler=train_sampler)  # , num_workers=4, pin_memory=True)
 
-    model = _NetX2().to(device)
+    model = _NetX2(num_blocks, num_channels).to(device)
     '''checkpoint = torch.load("model/model_srresnet.pth", map_location=device)
     state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
     model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)'''
+
+    checkpoint = torch.load(model_chpoint_path, map_location=device)
+    state_dict = checkpoint["model"] if "model" in checkpoint else checkpoint
+    filtered_state_dict = {k: v for k, v in state_dict.items() if k in model.state_dict()}
+    model.load_state_dict(filtered_state_dict, strict=False)
     model = DDP(model, device_ids=[rank])
 
     criterion = nn.MSELoss(reduction="mean")   # sum # `size_average=False` equivalent
