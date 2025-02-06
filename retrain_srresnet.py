@@ -7,20 +7,20 @@ from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 from srresnet import _NetG
 
-
+# Dataset paths
 current_directory = os.path.dirname(os.path.abspath(__file__))
 train_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/NLHR/X1"))
 train_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/NLHR/X2"))
 valid_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X1"))
 valid_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X2"))
 
-
+# Training Parameters
 BATCH_SIZE = 8
 LEARNING_RATE = 1e-4
 EPOCHS = 50
 SAVE_PATH = "model/srresnet_finetuned.pth"
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 # Custom Dataset
 class SRDataset(Dataset):
@@ -46,61 +46,58 @@ class SRDataset(Dataset):
 
         return lr_tensor, hr_tensor
 
-# Load Datasets
-train_dataset = SRDataset(train_datapathLR, train_datapathX2)
-valid_dataset = SRDataset(valid_datapathLR, valid_datapathX2)
 
-train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
-valid_loader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
+if __name__ == "__main__":
+    # Load Datasets
+    train_dataset = SRDataset(train_datapathLR, train_datapathX2)
+    valid_dataset = SRDataset(valid_datapathLR, valid_datapathX2)
 
-# Load Model
-model = _NetG()
-checkpoint = torch.load("model/model_srresnet.pth", map_location=device)
-if "model" in checkpoint:
-    state_dict = checkpoint["model"].state_dict()
-else:
-    state_dict = checkpoint
-filtered_state_dict = {k: v for k, v in state_dict.items() if k in model.state_dict()}
-model.load_state_dict(filtered_state_dict, strict=False)
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,
+                              num_workers=0)  # FIXED: num_workers=0 for Windows
+    valid_loader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=False,
+                              num_workers=0)  # FIXED: num_workers=0
 
-model = model.to(device)
-criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    # Load Model
+    model = _NetG()
+    checkpoint = torch.load("model/model_srresnet.pth", map_location=device)
+    state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
+    filtered_state_dict = {k: v for k, v in state_dict.items() if k in model.state_dict()}
+    model.load_state_dict(filtered_state_dict, strict=False)
 
-# Training Loop
-for epoch in range(EPOCHS):
-    model.train()
-    total_loss = 0
+    model = model.to(device)
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-    for lr, hr in train_loader:
-        lr, hr = lr.to(device), hr.to(device)
+    # Training Loop
+    for epoch in range(EPOCHS):
+        model.train()
+        total_loss = 0
 
-        optimizer.zero_grad()
-        sr = model(lr)
-        loss = criterion(sr, hr)
-        loss.backward()
-        optimizer.step()
-
-        total_loss += loss.item()
-
-    avg_train_loss = total_loss / len(train_loader)
-
-    # Validation Step
-    model.eval()
-    total_val_loss = 0
-    with torch.no_grad():
-        for lr, hr in valid_loader:
+        for lr, hr in train_loader:
             lr, hr = lr.to(device), hr.to(device)
+            optimizer.zero_grad()
             sr = model(lr)
             loss = criterion(sr, hr)
-            total_val_loss += loss.item()
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
 
-    avg_val_loss = total_val_loss / len(valid_loader)
+        avg_train_loss = total_loss / len(train_loader)
 
-    print(f"Epoch [{epoch+1}/{EPOCHS}] - Train Loss: {avg_train_loss:.6f}, Val Loss: {avg_val_loss:.6f}")
+        # Validation Step
+        model.eval()
+        total_val_loss = 0
+        with torch.no_grad():
+            for lr, hr in valid_loader:
+                lr, hr = lr.to(device), hr.to(device)
+                sr = model(lr)
+                loss = criterion(sr, hr)
+                total_val_loss += loss.item()
 
-    # Save model checkpoint
-    torch.save({"epoch": epoch, "model": model.state_dict()}, SAVE_PATH)
+        avg_val_loss = total_val_loss / len(valid_loader)
+        print(f"Epoch [{epoch + 1}/{EPOCHS}] - Train Loss: {avg_train_loss:.6f}, Val Loss: {avg_val_loss:.6f}")
 
-print("Fine-tuning complete. Model saved.")
+        # Save model checkpoint
+        torch.save({"epoch": epoch, "model": model.state_dict()}, SAVE_PATH)
 
+    print("Fine-tuning complete. Model saved.")

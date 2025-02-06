@@ -23,16 +23,19 @@ os.environ["TORCH_HOME"] = r"torch_cache"
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
 train_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/NLHR/X1"))
+train_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/LLLR"))
 train_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/NLHR/X4"))
 valid_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X1"))
+valid_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/LLLR"))
 valid_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X4"))
 
 # Training Parameters (From original main_srresnet.py)
 BATCH_SIZE = 2
 LEARNING_RATE = 1e-4
-EPOCHS = 10
+EPOCHS = 50
 STEP_DECAY = 200
-SAVE_PATH = "model/srresnet_finetuned.pth"
+EXPOSURE_PARAM = "3.0"
+SAVE_PATH = f"model/srresnet-LL2NL{EXPOSURE_PARAM}_finetuned-BS{BATCH_SIZE}-EP{EPOCHS}.pth"
 
 # Custom Dataset
 class SRDataset(Dataset):
@@ -42,12 +45,6 @@ class SRDataset(Dataset):
         self.lr_folder = lr_folder
         self.hr_folder = hr_folder
         self.transform = transforms.Compose([transforms.ToTensor()])
-        '''
-        self.hr_transform = transforms.Compose([
-            transforms.Resize((1250 * upscale_factor, 1250 * upscale_factor), transforms.InterpolationMode.BICUBIC),
-            transforms.ToTensor()
-        ])
-        '''
 
     def __len__(self):
         return len(self.lr_images)
@@ -55,6 +52,64 @@ class SRDataset(Dataset):
     def __getitem__(self, idx):
         lr_path = os.path.join(self.lr_folder, self.lr_images[idx])
         hr_path = os.path.join(self.hr_folder, self.hr_images[idx])
+
+        lr_image = Image.open(lr_path).convert("RGB")
+        hr_image = Image.open(hr_path).convert("RGB")
+
+        lr_tensor = self.transform(lr_image)
+        hr_tensor = self.transform(hr_image)
+
+        return lr_tensor, hr_tensor
+
+
+class SRDatasetLL(Dataset):
+    def __init__(self, lr_folder, hr_folder, param=None):
+        self.lr_folder = lr_folder
+        self.hr_folder = hr_folder
+        self.param = param  # Parameter value to filter LR images exposure setting
+        self.transform = transforms.Compose([transforms.ToTensor()])
+
+        # Group LR images by base name
+        self.lr_image_groups = self._group_lr_images()
+
+        # List of HR images
+        self.hr_images = sorted(os.listdir(hr_folder))
+
+    def _group_lr_images(self):
+        """Group LR images by base name (excluding the '-{param}' part)."""
+        lr_images = sorted(os.listdir(self.lr_folder))
+        grouped = {}
+        for lr_image in lr_images:
+            base_name = lr_image.split("-")[0]
+            if base_name not in grouped:
+                grouped[base_name] = []
+            grouped[base_name].append(lr_image)
+        return grouped
+
+    def __len__(self):
+        return len(self.hr_images)
+
+    def __getitem__(self, idx):
+        hr_name = self.hr_images[idx]  # HR image name
+        base_name = os.path.splitext(hr_name)[0]  # Get base name without extension
+
+        # Find corresponding LR image with specified parameter
+        lr_images = self.lr_image_groups.get(base_name, [])
+        if self.param is not None:
+            lr_image_name = next(
+                (img for img in lr_images if f"-{self.param}" in img),
+                None,
+            )
+            if lr_image_name is None:
+                raise ValueError(
+                    f"No LR image found for HR image '{hr_name}' with param '{self.param}'"
+                )
+        else:
+            # Default to the first LR image if no param is specified
+            lr_image_name = lr_images[0]
+
+        lr_path = os.path.join(self.lr_folder, lr_image_name)
+        hr_path = os.path.join(self.hr_folder, hr_name)
 
         lr_image = Image.open(lr_path).convert("RGB")
         hr_image = Image.open(hr_path).convert("RGB")
@@ -91,10 +146,10 @@ def train(rank, world_size):
     setup_ddp(rank, world_size)
     device = torch.device(f"cuda:{rank}")
 
-    train_dataset = SRDataset(train_datapathLR, train_datapathX2)
+    train_dataset = SRDatasetLL(train_datapathLRLL, train_datapathX2, EXPOSURE_PARAM)  # SRDataset for just upscaling
     train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank)# , shuffle=True)
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, sampler=train_sampler)  # , num_workers=4, pin_memory=True)
-
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, sampler=train_sampler, num_workers=4, pin_memory=True)
+    # shuffle=True gives error
     model = _NetG().to(device)
     checkpoint = torch.load("model/model_srresnet.pth", map_location=device)
     state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
@@ -143,12 +198,11 @@ def train(rank, world_size):
         # Save Model (Only Rank 0)
         if rank == 0:
             torch.save({"epoch": epoch, "model": model.module.state_dict()}, SAVE_PATH)
-            end_epoch_time = time.time()
-            print("Epoch training took ", round((end_epoch_time - start_epoch_time)/60, 2), " min")
 
         dist.barrier()  # Ensure all processes synchronize
 
-
+        end_epoch_time = time.time()
+        print("Epoch training took ", round((end_epoch_time - start_epoch_time)/60, 2), " min")
 
     cleanup_ddp()
 
