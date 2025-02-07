@@ -31,14 +31,13 @@ valid_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR
 
 # Training Parameters (From original main_srresnet.py)
 selected_blocks = [0, 15]
-BATCH_SIZE = 2
+BATCH_SIZE = 4
 LEARNING_RATE = 1e-4
-EPOCHS = 50
+EPOCHS = 30
 STEP_DECAY = 200
 EXPOSURE_PARAM = "3.0"
 SAVE_PATH = f"model/srresnet_Small-finetuned-BS{BATCH_SIZE}-EP{EPOCHS}-Bl{selected_blocks}.pth"
 
-pretrained_state = torch.load("model/model_srresnet.pth", map_location=device)["model"]
 
 # Custom Dataset
 class SRDataset(Dataset):
@@ -153,28 +152,31 @@ def train(rank, world_size):
     train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank)# , shuffle=True)
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, sampler=train_sampler, num_workers=4, pin_memory=True)
     # shuffle=True gives error
-
-    model = _NetGS(selected_blocks).to(device)
     # checkpoint = torch.load("model/model_srresnet.pth", map_location=device)
     # state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
+    # model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)
+
+    model = _NetGS(selected_blocks).to(device)
+    checkpoint = torch.load("model/model_srresnet.pth", map_location=device)
+    state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
+
+
     new_state_dict = {}
-    new_state_dict = {}
-    for name, param in pretrained_state.items():
-        if "residual.0" in name:
-            new_name = name.replace("residual.0", "block_0")
-            new_state_dict[new_name] = param
-        elif "residual.15" in name:
-            new_name = name.replace("residual.15", "block_15")
-            new_state_dict[new_name] = param
-        elif not name.startswith("residual"):  # Load all other weights (e.g., input, output, upscale layers)
+    for name, param in state_dict.items():
+        if "running_mean" in name or "running_var" in name:
+            continue
+        if "residual" in name:
+            block_idx = int(name.split('.')[1])
+            if block_idx in selected_blocks:
+                new_state_dict[f"block_{block_idx}"] = param
+        else:
             new_state_dict[name] = param
 
-    # model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)
-    model.load_state_dict(new_state_dict, strict=False)
+    # model.load_state_dict(new_state_dict, strict=False)
+    model.load_state_dict({k: v for k, v in new_state_dict.items() if k in model.state_dict()}, strict=False)
     model = DDP(model, device_ids=[rank])
 
-    # Loss and Optimizer (From original main_srresnet.py)
-    criterion = nn.MSELoss(reduction="mean")   # sum # `size_average=False` equivalent
+    criterion = nn.MSELoss(reduction="mean", size_average=False)   # sum # `size_average=False` equivalent
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
     for epoch in range(1, EPOCHS + 1):
