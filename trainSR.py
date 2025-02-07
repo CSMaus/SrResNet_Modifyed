@@ -23,22 +23,22 @@ os.environ["TORCH_HOME"] = r"torch_cache"
 
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
-train_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X1")) # Train
-train_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X2")) # Train
+train_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/NLHR/X1")) # Train
+train_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/NLHR/X2")) # Train
 valid_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X1"))
 valid_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X2"))
 train_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/LLLR"))
 valid_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/LLLR"))
 
 
-BATCH_SIZE = 4
+BATCH_SIZE = 6
 LEARNING_RATE = 1e-4
-EPOCHS = 20
+EPOCHS = 50
 STEP_DECAY = 150  # 200
-SAVE_PATH = f"model/srbottle_resnet-FT-BS{BATCH_SIZE}-EP{EPOCHS}.pth"
-model_chpoint_path = "model/srbottle_resnet-BS4-EP40.pth"
-num_blocks = 1  # 2 default for bottleneck
-num_channels = 64  # 32 was default for bottleneck
+num_blocks = 2  # 2 default for bottleneck
+num_channels = 48  # 32 was default for bottleneck
+SAVE_PATH = f"model/srbottle_resnet-FT-BS{BATCH_SIZE}-EP{EPOCHS}-B{num_blocks}-Ch{num_channels}.pth"
+# model_chpoint_path = "model/srbottle_resnet-BS4-EP40.pth"
 
 class SRDataset(Dataset):
     def __init__(self, lr_folder, hr_folder):
@@ -161,10 +161,10 @@ def train(rank, world_size):
     state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
     model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)'''
 
-    checkpoint = torch.load(model_chpoint_path, map_location=device)
-    state_dict = checkpoint["model"] if "model" in checkpoint else checkpoint
-    filtered_state_dict = {k: v for k, v in state_dict.items() if k in model.state_dict()}
-    model.load_state_dict(filtered_state_dict, strict=False)
+    # checkpoint = torch.load(model_chpoint_path, map_location=device)
+    # state_dict = checkpoint["model"] if "model" in checkpoint else checkpoint
+    # filtered_state_dict = {k: v for k, v in state_dict.items() if k in model.state_dict()}
+    # model.load_state_dict(filtered_state_dict, strict=False)
     model = DDP(model, device_ids=[rank])
 
     criterion = nn.MSELoss(reduction="mean")   # sum # `size_average=False` equivalent
