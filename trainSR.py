@@ -13,7 +13,7 @@ from torch.autograd import Variable
 from torchvision import transforms
 from PIL import Image
 # from srresnet import _NetG
-from custom_srresnet import _NetX2
+from custom_srresnet import _NetX2, _NetX2Eff
 
 # Fix memory fragmentation issues
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:256"
@@ -35,9 +35,9 @@ BATCH_SIZE = 6
 LEARNING_RATE = 1e-4
 EPOCHS = 50
 STEP_DECAY = 150  # 200
-num_blocks = 2  # 2 default for bottleneck
+num_blocks = 1  # 2 default for bottleneck
 num_channels = 48  # 32 was default for bottleneck
-SAVE_PATH = f"model/srbottle_resnet-FT-BS{BATCH_SIZE}-EP{EPOCHS}-B{num_blocks}-Ch{num_channels}.pth"
+SAVE_PATH = f"model/SR_EffBottleRes-BS{BATCH_SIZE}-EP{EPOCHS}-B{num_blocks}-Ch{num_channels}.pth"
 # model_chpoint_path = "model/srbottle_resnet-BS4-EP40.pth"
 
 class SRDataset(Dataset):
@@ -156,7 +156,8 @@ def train(rank, world_size):
     train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank)# , shuffle=True)
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, sampler=train_sampler)  # , num_workers=4, pin_memory=True)
 
-    model = _NetX2(num_blocks, num_channels).to(device)
+    # model = _NetX2(num_blocks, num_channels).to(device)
+    model = _NetX2Eff(num_blocks, num_channels).to(device)
     '''checkpoint = torch.load("model/model_srresnet.pth", map_location=device)
     state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
     model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)'''
