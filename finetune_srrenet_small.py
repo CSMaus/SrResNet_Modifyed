@@ -31,12 +31,14 @@ valid_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR
 
 # Training Parameters (From original main_srresnet.py)
 selected_blocks = [0, 15]
-BATCH_SIZE = 4
+BATCH_SIZE = 2
 LEARNING_RATE = 1e-4
-EPOCHS = 30
+EPOCHS = 20
 STEP_DECAY = 200
 EXPOSURE_PARAM = "3.0"
-SAVE_PATH = f"model/srresnet_Small-finetuned-BS{BATCH_SIZE}-EP{EPOCHS}-Bl{selected_blocks}.pth"
+SAVE_PATH = f"model/srresnet_Small-FT-BS{BATCH_SIZE}-EP{EPOCHS}-Bl{selected_blocks}.pth"
+# pretrained_checkpoint = torch.load("model/model_srresnet.pth", map_location="cpu")
+# pretrained_state = pretrained_checkpoint["model"].state_dict() if "model" in pretrained_checkpoint else pretrained_checkpoint
 
 
 # Custom Dataset
@@ -148,7 +150,7 @@ def train(rank, world_size):
     setup_ddp(rank, world_size)
     device = torch.device(f"cuda:{rank}")
 
-    train_dataset = SRDatasetLL(train_datapathLRLL, train_datapathX2, EXPOSURE_PARAM)  # SRDataset for just upscaling
+    train_dataset = SRDataset(train_datapathLR, train_datapathX2)  # SRDataset for just upscaling
     train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank)# , shuffle=True)
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, sampler=train_sampler, num_workers=4, pin_memory=True)
     # shuffle=True gives error
@@ -156,27 +158,20 @@ def train(rank, world_size):
     # state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
     # model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)
 
-    model = _NetGS(selected_blocks).to(device)
+    model = _NetGS(2).to(device)
     checkpoint = torch.load("model/model_srresnet.pth", map_location=device)
     state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
-
-
     new_state_dict = {}
+    model_keys = set(model.state_dict().keys())
     for name, param in state_dict.items():
-        if "running_mean" in name or "running_var" in name:
-            continue
-        if "residual" in name:
-            block_idx = int(name.split('.')[1])
-            if block_idx in selected_blocks:
-                new_state_dict[f"block_{block_idx}"] = param
-        else:
+        # if not name.startswith("residual"):
+        #     new_state_dict[name] = param
+        if name in model_keys:
             new_state_dict[name] = param
-
-    # model.load_state_dict(new_state_dict, strict=False)
-    model.load_state_dict({k: v for k, v in new_state_dict.items() if k in model.state_dict()}, strict=False)
+    model.load_state_dict(new_state_dict, strict=False)
     model = DDP(model, device_ids=[rank])
 
-    criterion = nn.MSELoss(reduction="mean", size_average=False)   # sum # `size_average=False` equivalent
+    criterion = nn.MSELoss(reduction="mean")   # sum # `size_average=False` equivalent
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
     for epoch in range(1, EPOCHS + 1):
@@ -222,5 +217,6 @@ if __name__ == "__main__":
         raise RuntimeError(f"Need at least 4 GPUs, but found {WORLD_SIZE}")
 
     mp.set_start_method("spawn", force=True)
+
     mp.spawn(train, args=(WORLD_SIZE,), nprocs=WORLD_SIZE, join=True)
 

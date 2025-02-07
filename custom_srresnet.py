@@ -20,19 +20,15 @@ class _Residual_Block(nn.Module):
         output = torch.add(output, identity_data)
         return output
 class _NetGS(nn.Module):
-    def __init__(self, selected_blocks):
+    def __init__(self, num_blocks):
         super(_NetGS, self).__init__()
 
         self.conv_input = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=9, stride=1, padding=4, bias=False)
         self.relu = nn.LeakyReLU(0.2, inplace=True)
 
-        # Define only the selected residual blocks (0 and 15)
-        self.block_0 = _Residual_Block()
-        self.block_15 = _Residual_Block()
+        self.residual = self.make_layer(_Residual_Block, num_blocks)
 
-        # Define an intermediate layer between the two blocks
-        self.intermediate_layer = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
-
+        self.conv_mid = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn_mid = nn.InstanceNorm2d(64, affine=True)
 
         self.upscale4x = nn.Sequential(
@@ -46,10 +42,6 @@ class _NetGS(nn.Module):
 
         self.conv_output = nn.Conv2d(in_channels=64, out_channels=3, kernel_size=9, stride=1, padding=4, bias=False)
 
-        self._initialize_weights()
-
-    def _initialize_weights(self):
-        # Initialize weights for new layers
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -57,11 +49,18 @@ class _NetGS(nn.Module):
                 if m.bias is not None:
                     m.bias.data.zero_()
 
+    def make_layer(self, block, num_of_layer):
+        layers = []
+        for _ in range(num_of_layer):
+            layers.append(block())
+        return nn.Sequential(*layers)
+
     def forward(self, x):
         out = self.relu(self.conv_input(x))
-        out = self.block_0(out)
-        out = self.bn_mid(self.intermediate_layer(out))
-        out = self.block_15(out)
+        residual = out
+        out = self.residual(out)
+        out = self.bn_mid(self.conv_mid(out))
+        out = torch.add(out, residual)
         out = self.upscale4x(out)
         out = self.conv_output(out)
         return out

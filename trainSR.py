@@ -13,7 +13,7 @@ from torch.autograd import Variable
 from torchvision import transforms
 from PIL import Image
 # from srresnet import _NetG
-from custom_srresnet import _NetX2, _NetX2Eff
+from custom_srresnet import _NetX2, _NetX2Eff, _NetGS
 
 # Fix memory fragmentation issues
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:256"
@@ -31,9 +31,9 @@ train_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLIS
 valid_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/LLLR"))
 
 
-BATCH_SIZE = 4
+BATCH_SIZE = 2
 LEARNING_RATE = 1e-4
-EPOCHS = 40
+EPOCHS = 20
 STEP_DECAY = 150  # 200
 num_blocks = 2  # 2 default for bottleneck
 num_channels = 24  # 32 was default for bottleneck
@@ -157,7 +157,8 @@ def train(rank, world_size):
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, sampler=train_sampler)  # , num_workers=4, pin_memory=True)
 
     # model = _NetX2(num_blocks, num_channels).to(device)
-    model = _NetX2Eff(num_blocks, num_channels).to(device)
+    # model = _NetX2Eff(num_blocks, num_channels).to(device)
+    model = _NetGS(num_blocks).to(device)
     '''checkpoint = torch.load("model/model_srresnet.pth", map_location=device)
     state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
     model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)'''
