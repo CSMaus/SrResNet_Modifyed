@@ -31,12 +31,12 @@ train_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLIS
 valid_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/LLLR"))
 
 
-BATCH_SIZE = 6
+BATCH_SIZE = 4
 LEARNING_RATE = 1e-4
-EPOCHS = 50
+EPOCHS = 40
 STEP_DECAY = 150  # 200
-num_blocks = 1  # 2 default for bottleneck
-num_channels = 48  # 32 was default for bottleneck
+num_blocks = 2  # 2 default for bottleneck
+num_channels = 24  # 32 was default for bottleneck
 SAVE_PATH = f"model/SR_EffBottleRes-BS{BATCH_SIZE}-EP{EPOCHS}-B{num_blocks}-Ch{num_channels}.pth"
 # model_chpoint_path = "model/srbottle_resnet-BS4-EP40.pth"
 
