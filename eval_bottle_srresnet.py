@@ -5,20 +5,21 @@ import torchvision.transforms as transforms
 import cv2
 import numpy as np
 from PIL import Image
-from custom_srresnet import _NetX2
+from custom_srresnet import _NetX2, _NetX2Eff
 
-# model_path = "model/model_srresnet.pth"
-# model_path = "model/srresnet_finetuned-BS2-EP30.pth"  # srresnet_finetuned.pth"
-model_path = "model/srbottle_resnet.pth"  # srresnet_finetuned.pth"
+# model_path = "model/srbottle_resnet-FT-BS4-EP30.pth"
+model_path = "model/SR_EffBottleRes-BS4-EP40-B2-Ch24.pth"
+# model_path = "model/srbottle_resnet-FT-BS6-EP50-B2-Ch48.pth"  # srbottle_resnet-FT-BS4-EP20.pth"
 input_image_path = "imgs/00075.png"  # step_4_vibrance.jpg"  # 00076-2.5.png"  # 00076.png
-output_path = f"imgs/{input_image_path[5:-4]}-output_bottleSR.png"
+# output_path = f"imgs/{input_image_path[5:-4]}-output_bottle_1R2B48.png"
+output_path = f"imgs/test.png"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
-num_blocks = 2  # default
-num_channels = 32
+num_blocks = 2  # 2 default
+num_channels = 24  # 32 default
 # need to set the number of blocks and number of channels
-model = _NetX2()
+model = _NetX2Eff(num_blocks, num_channels)
 
 checkpoint = torch.load(model_path, map_location=device)
 state_dict = checkpoint["model"] if "model" in checkpoint else checkpoint
