@@ -228,14 +228,14 @@ class _NetG(nn.Module):
         self.conv_mid = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn_mid = nn.InstanceNorm2d(64, affine=True)
 
-        '''self.upscale4x = nn.Sequential(
+        self.upscale4x = nn.Sequential(
             nn.Conv2d(in_channels=64, out_channels=256, kernel_size=3, stride=1, padding=1, bias=False),
             nn.PixelShuffle(2),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(in_channels=64, out_channels=256, kernel_size=3, stride=1, padding=1, bias=False),
             nn.PixelShuffle(2),
             nn.LeakyReLU(0.2, inplace=True),
-        )'''
+        )
         self.upscale2x = nn.Sequential(
             nn.Conv2d(in_channels=64, out_channels=256, kernel_size=3, stride=1, padding=1, bias=False),
             nn.PixelShuffle(2),
