@@ -23,23 +23,20 @@ os.environ["TORCH_HOME"] = r"torch_cache"
 
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
-train_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/NLHR/X1")) # Train
-train_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/NLHR/X2")) # Train
+train_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/LLLR-CLAHE")) # NLHR/X1
+train_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/NLHR/X4")) # Train
 valid_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X1"))
-valid_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X2"))
+valid_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/NLHR/X4"))
 train_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/LLLR"))
 valid_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/LLLR"))
 
 
 BATCH_SIZE = 2
 LEARNING_RATE = 1e-4
-EPOCHS = 20
+EPOCHS = 30
 STEP_DECAY = 150  # 200
-num_blocks = 2  # 2 default for bottleneck
-num_channels = 24  # 32 was default for bottleneck
-# SAVE_PATH = f"model/SR_EffBottleRes-BS{BATCH_SIZE}-EP{EPOCHS}-B{num_blocks}-Ch{num_channels}.pth"
 CURR_DATE = datetime.now().strftime('%Y-%m-%d_%H-%M')
-SAVE_PATH = f"model/srresnet-FT-X2-BS{BATCH_SIZE}-EP{EPOCHS}_{CURR_DATE}.pth"
+SAVE_PATH = f"model/srresnet-FT-X4-BS{BATCH_SIZE}-EP{EPOCHS}_{CURR_DATE}.pth"
 # model_chpoint_path = "model/srbottle_resnet-BS4-EP40.pth"
 
 class SRDataset(Dataset):
