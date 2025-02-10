@@ -236,11 +236,6 @@ class _NetG(nn.Module):
             nn.PixelShuffle(2),
             nn.LeakyReLU(0.2, inplace=True),
         )
-        self.upscale2x = nn.Sequential(
-            nn.Conv2d(in_channels=64, out_channels=256, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.PixelShuffle(2),
-            nn.LeakyReLU(0.2, inplace=True),
-        )
 
         self.conv_output = nn.Conv2d(in_channels=64, out_channels=3, kernel_size=9, stride=1, padding=4, bias=False)
 
@@ -263,7 +258,7 @@ class _NetG(nn.Module):
         out = self.residual(out)
         out = self.bn_mid(self.conv_mid(out))
         out = torch.add(out, residual)
-        out = self.upscale2x(out)
+        out = self.upscale4x(out)
         out = self.conv_output(out)
         return out
 

@@ -164,15 +164,24 @@ def train(rank, world_size):
     model = _NetG().to(device)
     checkpoint = torch.load("model/model_srresnet.pth", map_location=device)
     state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
-    # model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)
-
+    model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)
+    '''
+    # This gives very bad results
+    # will keep 4x upscale
+    new_state_dict = {}
+    model_keys = set(model.state_dict().keys())
+    for name, param in state_dict.items():
+        # if not name.startswith("residual"):
+        #     new_state_dict[name] = param
+        if name in model_keys:
+            new_state_dict[name] = param
     new_state_dict = {}
     for name, param in state_dict.items():
-        if "upscale" in name or "upscale4x" in name:  # Skip last upscaling layers
+        if "upscale4x" in name:  # Skip last upscaling layers
             continue
         new_state_dict[name] = param
-    model.load_state_dict(new_state_dict, strict=False)
-
+    model.load_state_dict({k: v for k, v in new_state_dict.items() if k in model.state_dict()}, strict=False)
+    '''
     # checkpoint = torch.load(model_chpoint_path, map_location=device)
     # state_dict = checkpoint["model"] if "model" in checkpoint else checkpoint
     # filtered_state_dict = {k: v for k, v in state_dict.items() if k in model.state_dict()}
