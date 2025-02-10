@@ -12,12 +12,9 @@ from torchvision.transforms.functional import to_pil_image
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 
-# model_path = "model/model_srresnet.pth"
-# model_path = "model/srresnet_finetuned-BS2-EP30.pth"  # srresnet_finetuned.pth"
-# model_path = "model/srresnet-LL2NL3.0_finetuned-BS2-EP50.pth"  # srresnet_finetuned.pth"
 
-model_path = "model/srresnet_finetuned-BS2-EP30.pth"
-input_image_path = "imgs/frame_0.png"  # step_4_vibrance.jpg"  # 00076-2.5.png"  # 00076.png
+model_path = "model/srresnet-FT-X4-BS2-EP30_2025-02-10_18-10.pth"  # srresnet_finetuned-BS2-EP30.pth"
+input_image_path = "imgs/00018.png"
 output_path = f"imgs/{input_image_path[5:-4]}_output-FT-BS2-EP30.png"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
