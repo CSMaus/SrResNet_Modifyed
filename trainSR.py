@@ -1,7 +1,6 @@
 import os
 import math
 import time
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -13,7 +12,8 @@ from torch.autograd import Variable
 from torchvision import transforms
 from PIL import Image
 # from srresnet import _NetG
-from custom_srresnet import _NetX2, _NetX2Eff, _NetGS
+from custom_srresnet import _NetX2, _NetX2Eff, _NetGS, _NetG
+from datetime import datetime
 
 # Fix memory fragmentation issues
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:256"
@@ -37,7 +37,9 @@ EPOCHS = 20
 STEP_DECAY = 150  # 200
 num_blocks = 2  # 2 default for bottleneck
 num_channels = 24  # 32 was default for bottleneck
-SAVE_PATH = f"model/SR_EffBottleRes-BS{BATCH_SIZE}-EP{EPOCHS}-B{num_blocks}-Ch{num_channels}.pth"
+# SAVE_PATH = f"model/SR_EffBottleRes-BS{BATCH_SIZE}-EP{EPOCHS}-B{num_blocks}-Ch{num_channels}.pth"
+CURR_DATE = datetime.now().strftime('%Y-%m-%d_%H-%M')
+SAVE_PATH = f"model/srresnet-FT-X2-BS{BATCH_SIZE}-EP{EPOCHS}_{CURR_DATE}.pth"
 # model_chpoint_path = "model/srbottle_resnet-BS4-EP40.pth"
 
 class SRDataset(Dataset):
@@ -158,11 +160,18 @@ def train(rank, world_size):
 
     # model = _NetX2(num_blocks, num_channels).to(device)
     # model = _NetX2Eff(num_blocks, num_channels).to(device)
-    model = _NetGS(num_blocks).to(device)
-    '''checkpoint = torch.load("model/model_srresnet.pth", map_location=device)
+    # model = _NetGS(num_blocks).to(device)
+    model = _NetG().to(device)
+    checkpoint = torch.load("model/model_srresnet.pth", map_location=device)
     state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
-    model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)'''
+    # model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)
+    new_state_dict = {}
+    for name, param in state_dict.items():
+        if "upscale" in name or "upscale4x" in name:  # Skip last upscaling layers
+            continue
+        new_state_dict[name] = param
 
+    model.load_state_dict(new_state_dict, strict=False)
     # checkpoint = torch.load(model_chpoint_path, map_location=device)
     # state_dict = checkpoint["model"] if "model" in checkpoint else checkpoint
     # filtered_state_dict = {k: v for k, v in state_dict.items() if k in model.state_dict()}
