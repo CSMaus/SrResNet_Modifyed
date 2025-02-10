@@ -10,6 +10,7 @@ import torchvision.transforms.functional as TF
 from torchvision.utils import save_image
 from torchvision.transforms.functional import to_pil_image
 import matplotlib.pyplot as plt
+import torch.nn.functional as F
 
 # model_path = "model/model_srresnet.pth"
 # model_path = "model/srresnet_finetuned-BS2-EP30.pth"  # srresnet_finetuned.pth"
@@ -17,7 +18,7 @@ import matplotlib.pyplot as plt
 
 model_path = "model/srresnet_finetuned-BS2-EP30.pth"
 input_image_path = "imgs/00075.png"  # step_4_vibrance.jpg"  # 00076-2.5.png"  # 00076.png
-output_path = f"imgs/{input_image_path[5:-4]}_output-FT-BS2-EP30-SPEEDUP.png"
+output_path = f"imgs/{input_image_path[5:-4]}_output-FT-BS2-EP30.png"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
@@ -49,34 +50,73 @@ def load_image(image_path):
 st = time.time()
 input_tensor = load_image(input_image_path).to(device)
 print("Input image loaded in: ", time.time() - st, " sec")
+testing_streams = False
 
-with torch.no_grad():
-    testt = time.time()
-    model(input_tensor)
-    print("Model warm-up took: ", time.time() - testt, " sec")
-    st = time.time()
-    output_tensor = model(input_tensor)
-    print("Model inference took: ", time.time() - st, " sec")
+if not testing_streams:
+    # with torch.no_grad():
+    stream = torch.cuda.Stream()
+    with torch.cuda.stream(stream):
+        testt = time.time()
+        model(input_tensor)
+        print("Model warm-up took: ", time.time() - testt, " sec")
+        st = time.time()
+        output_tensor = model(input_tensor)
+        print("Model inference took: ", time.time() - st, " sec")
 
 
+        # resize tensor to make .to_cpu() faster
+        # output_tensor = F.interpolate(output_tensor, size=(256, 256), mode='bilinear', align_corners=False)
 
-# image_conversion_back_time = time.time()
+        image_conversion_back_time = time.time()
+        output_tensor = output_tensor.squeeze(0).mul(255).clamp(0, 255).byte()  # Convert on GPU first
+        output_image_perm = output_tensor.permute(1, 2, 0)
+        # output_tensor = output_tensor.to(torch.half)
+        print("Image squeeze and permute took: ", time.time() - image_conversion_back_time, " sec")
 
+
+    # print(torch.cuda.memory_summary(device=None, abbreviated=True))
+    cuda_sync = time.time()
+    # dummy = output_tensor.sum().item()
+    # torch.cuda.synchronize()
+    stream.synchronize()
+    print("CUDA sync took: ", time.time() - cuda_sync, " sec")
+
+    topil = time.time()
+    output_image = output_image_perm.cpu() # output_image_perm.cpu()
+    print("Image to cpu took: ", time.time() - topil, " sec")
+    #TODO: solve error .pin_memory() : RuntimeError: cannot pin 'torch.cuda.ByteTensor' only dense CPU tensors can be pinned
+
+else:
+    stream = torch.cuda.Stream()
+    with torch.cuda.stream(stream):
+        testt = time.time()
+        model(input_tensor)
+        print("Model warm-up took: ", time.time() - testt, " sec")
+
+        st = time.time()
+        output_tensor = model(input_tensor)
+        print("Model inference took: ", time.time() - st, " sec")
+
+        image_conversion_back_time = time.time()
+        output_tensor = output_tensor.squeeze(0).mul(255).clamp(0, 255).byte().permute(1, 2, 0)
+        output_tensor = output_tensor.to(torch.half)
+        print("Image squeeze and permute took: ", time.time() - image_conversion_back_time, " sec")
+    topil = time.time()
+    output_image = output_tensor.cpu()
+    print("Image to cpu took: ", time.time() - topil, " sec")
 # output_image = output_tensor.squeeze().permute(1, 2, 0).cpu().numpy()
 # output_image = (output_image * 255).clip(0, 255).astype(np.uint8)
 # trying to optimize:
-# output_image = TF.to_pil_image(output_tensor.squeeze(0).cpu())  # also slow
-# output_image.save(output_path)
+
 
 # output_tensor = output_tensor.squeeze(0).mul(255).clamp(0, 255).byte()  # Convert on GPU first
 # output_image_perm = output_tensor.permute(1, 2, 0)
 # output_tensor = output_tensor.squeeze(0).detach().mul(255).clamp(0, 255).to(torch.uint8)
-output_tensor = output_tensor.squeeze(0).detach().mul(255).clamp(0, 255).to(torch.uint8)
-output_image = output_tensor.permute(1, 2, 0) # .numpy()
 
-# print("Image squeeze and permute took: ", time.time() - image_conversion_back_time, " sec")
+# output_tensor = output_tensor.squeeze(0).detach().mul(255).clamp(0, 255).to(torch.uint8)
+# output_image = output_tensor.permute(1, 2, 0) # .numpy()
 
-
+'''
 import pycuda.driver as cuda
 import pycuda.autoinit
 import numpy as np
@@ -89,8 +129,8 @@ def show_image_with_matplotlib(output_tensor):
     plt.axis("off")
     plt.show()
 
-topil = time.time()
-show_image_with_matplotlib(output_image)
+
+show_image_with_matplotlib(output_image)'''
 # output_image = output_image_perm.cpu().numpy()  # Move to CPU after conversion
 
 # still too much time
@@ -99,7 +139,11 @@ show_image_with_matplotlib(output_image)
 # output_image = to_pil_image(output_tensor)
 
 
-print("Image conversion to PIL took: ", time.time() - topil, " sec")
+# output_image = TF.to_pil_image(output_tensor.squeeze(0).cpu())  # also slow
+
+
+output_image = output_image.numpy()
+# output_image.save(output_path)
 # print("Image conversion back took: ", time.time() - image_conversion_back_time, " sec")
 cv2.imwrite(output_path, cv2.cvtColor(output_image, cv2.COLOR_RGB2BGR))
 print(f"Super-resolved image saved at: {output_path}")
