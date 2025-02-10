@@ -17,11 +17,19 @@ import torch.nn.functional as F
 # model_path = "model/srresnet-LL2NL3.0_finetuned-BS2-EP50.pth"  # srresnet_finetuned.pth"
 
 model_path = "model/srresnet_finetuned-BS2-EP30.pth"
-input_image_path = "imgs/00075.png"  # step_4_vibrance.jpg"  # 00076-2.5.png"  # 00076.png
+input_image_path = "imgs/00076.png"  # step_4_vibrance.jpg"  # 00076-2.5.png"  # 00076.png
 output_path = f"imgs/{input_image_path[5:-4]}_output-FT-BS2-EP30.png"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
+if torch.cuda.is_available():
+    gpu_id = torch.cuda.current_device()
+    print(f"Using GPU: {torch.cuda.get_device_name(gpu_id)}")
+    print(f"CUDA Compute Capability: {torch.cuda.get_device_capability(gpu_id)}")
+    print(f"CUDA Memory (Total): {torch.cuda.get_device_properties(gpu_id).total_memory / 1e9} GB")
+    print(f"CUDA Multiprocessors: {torch.cuda.get_device_properties(gpu_id).multi_processor_count}")
+    print(f"CUDA Cores: {torch.cuda.get_device_properties(gpu_id).multi_processor_count * 64}")
+
 model = _NetG()
 
 checkpoint = torch.load(model_path, map_location=device)
@@ -56,29 +64,30 @@ if not testing_streams:
     # with torch.no_grad():
     stream = torch.cuda.Stream()
     with torch.cuda.stream(stream):
-        testt = time.time()
-        model(input_tensor)
-        print("Model warm-up took: ", time.time() - testt, " sec")
-        st = time.time()
-        output_tensor = model(input_tensor)
-        print("Model inference took: ", time.time() - st, " sec")
+        with torch.no_grad():
+            testt = time.time()
+            model(input_tensor)
+            print("Model warm-up took: ", time.time() - testt, " sec")
+            st = time.time()
+            output_tensor = model(input_tensor)
+            print("Model inference took: ", time.time() - st, " sec")
+    
 
+            # resize tensor to make .to_cpu() faster
+            # output_tensor = F.interpolate(output_tensor, size=(256, 256), mode='bilinear', align_corners=False)
 
-        # resize tensor to make .to_cpu() faster
-        # output_tensor = F.interpolate(output_tensor, size=(256, 256), mode='bilinear', align_corners=False)
-
-        image_conversion_back_time = time.time()
-        output_tensor = output_tensor.squeeze(0).mul(255).clamp(0, 255).byte()  # Convert on GPU first
-        output_image_perm = output_tensor.permute(1, 2, 0)
-        # output_tensor = output_tensor.to(torch.half)
-        print("Image squeeze and permute took: ", time.time() - image_conversion_back_time, " sec")
+            image_conversion_back_time = time.time()
+            output_tensor = output_tensor.squeeze(0).mul(255).clamp(0, 255).byte()  # Convert on GPU first
+            output_image_perm = output_tensor.permute(1, 2, 0)
+            # output_tensor = output_tensor.to(torch.half)
+            print("Image squeeze and permute took: ", time.time() - image_conversion_back_time, " sec")
 
 
     # print(torch.cuda.memory_summary(device=None, abbreviated=True))
     cuda_sync = time.time()
     # dummy = output_tensor.sum().item()
-    # torch.cuda.synchronize()
-    stream.synchronize()
+    torch.cuda.synchronize()
+    # stream.synchronize()
     print("CUDA sync took: ", time.time() - cuda_sync, " sec")
 
     topil = time.time()
