@@ -21,7 +21,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 # os.environ["OMP_NUM_THREADS"] = "1"  # Prevents CPU threading issues
 os.environ["TORCH_HOME"] = r"torch_cache"
 
-
+print("TRAINING FOR WELD UPSCALING")
 current_directory = os.path.dirname(os.path.abspath(__file__))
 train_datapathLR = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/LLLR-CLAHE")) # NLHR/X1
 train_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/NLHR/X4")) # Train
@@ -30,14 +30,17 @@ valid_datapathX2 = os.path.normpath(os.path.join(current_directory, "../RELLISUR
 train_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/LLLR"))
 valid_datapathLRLL = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Val/LLLR"))
 
+train_datapath_weldLR = os.path.normpath(os.path.join(current_directory, "../UpscalingDS/LLLR"))
+train_datapath_weldHR = os.path.normpath(os.path.join(current_directory, "../UpscalingDS/NLHR"))
 
-BATCH_SIZE = 2
+BATCH_SIZE = 4
 LEARNING_RATE = 1e-4
 EPOCHS = 30
 STEP_DECAY = 150  # 200
 CURR_DATE = datetime.now().strftime('%Y-%m-%d_%H-%M')
-SAVE_PATH = f"model/srresnet-FT-X4-BS{BATCH_SIZE}-EP{EPOCHS}_{CURR_DATE}.pth"
-# model_chpoint_path = "model/srbottle_resnet-BS4-EP40.pth"
+SAVE_PATH = f"model/WELDsrresnet_FT-X4-BS{BATCH_SIZE}-EP{EPOCHS}_{CURR_DATE}.pth"
+# model_chpoint_path = "model/srresnet_finetuned-BS2-EP30.pth"  # model_srresnet
+model_chpoint_path = "model/srresnet-FT_of_FT-X4-BS2-EP13_2025-02-11_13-20.pth"  # model_srresnet
 
 class SRDataset(Dataset):
     def __init__(self, lr_folder, hr_folder):
@@ -151,16 +154,18 @@ def train(rank, world_size):
     setup_ddp(rank, world_size)
     device = torch.device(f"cuda:{rank}")
 
-    train_dataset = SRDataset(train_datapathLR, train_datapathX2)
-    train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank)# , shuffle=True)
+    # train_dataset = SRDataset(train_datapathLR, train_datapathX2)
+    train_dataset = SRDataset(train_datapath_weldLR, train_datapath_weldHR)
+    train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank)  # , shuffle=True)
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, sampler=train_sampler)  # , num_workers=4, pin_memory=True)
 
     # model = _NetX2(num_blocks, num_channels).to(device)
     # model = _NetX2Eff(num_blocks, num_channels).to(device)
     # model = _NetGS(num_blocks).to(device)
     model = _NetG().to(device)
-    checkpoint = torch.load("model/model_srresnet.pth", map_location=device)
-    state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
+    checkpoint = torch.load(model_chpoint_path, map_location=device)
+    # state_dict = checkpoint["model"].state_dict() if "model" in checkpoint else checkpoint
+    state_dict = checkpoint["model"] if "model" in checkpoint else checkpoint
     model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)
     '''
     # This gives very bad results
@@ -180,7 +185,7 @@ def train(rank, world_size):
     model.load_state_dict({k: v for k, v in new_state_dict.items() if k in model.state_dict()}, strict=False)
     '''
     # checkpoint = torch.load(model_chpoint_path, map_location=device)
-    # state_dict = checkpoint["model"] if "model" in checkpoint else checkpoint
+
     # filtered_state_dict = {k: v for k, v in state_dict.items() if k in model.state_dict()}
     # model.load_state_dict(filtered_state_dict, strict=False)
     model = DDP(model, device_ids=[rank])
