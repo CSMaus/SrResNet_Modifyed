@@ -13,9 +13,11 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 
 
-model_path = "model/srresnet-FT-X4-BS2-EP30_2025-02-10_18-10.pth"  # srresnet_finetuned-BS2-EP30.pth"
-input_image_path = "imgs/00018.png"
-output_path = f"imgs/{input_image_path[5:-4]}_output-FT-BS2-EP30.png"
+# model_path = "model/WELDsrresnet_FT-X4-BS4-EP17_2025-02-11_16-04.pth"  # srresnet_finetuned-BS2-EP30.pth"
+model_path = "model/srresnet_finetuned-BS2-EP30.pth"
+input_image_path = "imgs/lq_928.png"
+output_path = f"imgs/{input_image_path[5:-4]}_FT_srresnet.png"
+# output_path = f"imgs/testtFTFT.png"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
