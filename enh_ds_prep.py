@@ -65,12 +65,13 @@ def preprocLightnessCLAHEImgs(datapath, toSavePath):
         adjusted_frame = apply_adjustments(frame)
         adjusted_name = f"{img.split('-')[0]}.png"
         cv2.imwrite(os.path.join(toSavePath, adjusted_name), adjusted_frame)
-        print(f"Saved {img}")
+        # print(f"Saved {img}")
 
 
 if __name__ == "__main__":
     current_directory = os.path.dirname(os.path.abspath(__file__))
-    datapath = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Train/LLLR"))
+    # datapath = os.path.normpath(os.path.join(current_directory, "../RELLISUR-Dataset/Test/LLLR"))
+    datapath = os.path.normpath("D:\DataSets\!!UPscalinbg\RELLISUR-Dataset\Test\LLLR")
     toSavePath = os.path.normpath(os.path.join(datapath, "../LLLR-CLAHE"))
     preprocLightnessCLAHEImgs(datapath, toSavePath)
 
