@@ -27,15 +27,15 @@ with torch.no_grad():
 
 
 # these are parameters for enhancement low quality very bad video
-exposure = 1.2
-brightness = 10 # 110-100
-contrast = 50  # 28 # 130 - 100
-vibrance = 1.5
-hue = 5
-saturation = 29
-lightness = 10  # 108 - 100
-clip_limit = 13.5  # was 5
-tile_grid_size = 71  # was 12
+exposure = 1 # 1.2
+brightness = 1  # 10 # 110-100
+contrast = 1 # 50  # 28 # 130 - 100
+vibrance = 1.1 # 1.5
+hue = 1 # 5
+saturation = 1 # 29
+lightness = 1 # 10  # 108 - 100
+clip_limit = 0.1 # 13.5  # was 5
+tile_grid_size = 1 # 71  # was 12
 current_frame = 0
 total_frames = 1
 is_frame_reset = False
@@ -62,7 +62,8 @@ def adjust_exposure(frame):
 def apply_clahe(img):
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(tile_grid_size, tile_grid_size))
+    if clip_limit != 0 and tile_grid_size != 0:
+        clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(tile_grid_size, tile_grid_size))
     cl = clahe.apply(l)
     limg = cv2.merge((cl, a, b))
     return cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
@@ -90,7 +91,7 @@ def apply_adjustments(frame):
 
     adjusted_hsv = cv2.merge([h, s, v])
     adjusted_frame = cv2.cvtColor(adjusted_hsv, cv2.COLOR_HSV2BGR)
-    adjusted_frame = adjust_exposure(adjusted_frame)
+    # adjusted_frame = adjust_exposure(adjusted_frame)
     return adjusted_frame
 
 
@@ -138,7 +139,7 @@ class VideoProcessor(QMainWindow):
         self.sliders_window.show()
 
     def update_frame(self):
-        global is_frame_reset, current_frame, do_save_frame, up_ds_folder, use_nn_upscaling
+        global is_frame_reset, current_frame, do_save_frame, up_ds_folder, use_nn_upscaling, do_nn_first
 
         ret, frame = self.cap.read()
         if not ret:
@@ -241,8 +242,8 @@ class SlidersWindow(QWidget):
         self.hue_slider = self.create_slider("Hue", 0, 100, hue, self.update_hue)
         self.saturation_slider = self.create_slider("Saturation", 0, 100, saturation, self.update_saturation)
         self.lightness_slider = self.create_slider("Lightness", 0, 200, lightness, self.update_lightness)
-        self.clip_limit_slider = self.create_slider("CLAHE Clip Limit", 1, 150, int(clip_limit * 10), self.update_clip_limit)
-        self.tile_grid_slider = self.create_slider("CLAHE Tile Grid Size", 1, 100, tile_grid_size, self.update_tile_grid)
+        self.clip_limit_slider = self.create_slider("CLAHE Clip Limit", 0, 150, int(clip_limit * 10), self.update_clip_limit)
+        self.tile_grid_slider = self.create_slider("CLAHE Tile Grid Size", 0, 100, tile_grid_size, self.update_tile_grid)
         self.frame_reset_slider = self.create_slider("Frame Reset", 0, total_frames-1, 0, self.update_frame_reset)
 
         # checkbox
@@ -355,9 +356,10 @@ class SlidersWindow(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
-    video_name = "Weld_Video_2023-04-20_01-55-23_Camera01.avi.avi"
+    # video_name = "Weld_Video_2023-04-20_01-55-23_Camera01.avi.avi"
     # video_name = "low_quality.mp4"
     # video_name = "HighQuality.mp4"
+    video_name = "test_video3.mp4"
     video_path = os.path.join(datapath, video_name)
 
     cap = cv2.VideoCapture(video_path)
