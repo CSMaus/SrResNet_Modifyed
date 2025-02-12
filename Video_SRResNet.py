@@ -41,10 +41,11 @@ total_frames = 1
 is_frame_reset = False
 do_save_frame = False
 use_nn_upscaling = False
+do_nn_first = False  # do NN upscaling before CLAHE
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
-datapath = os.path.normpath(os.path.join(current_directory, "../../Data/Weld_VIdeo/"))
-up_ds_folder = os.path.normpath(os.path.join(current_directory, "../../Data/UpVideoTest/"))
+datapath = os.path.normpath(os.path.join(current_directory, "../Data/Weld_VIdeo/"))
+up_ds_folder = os.path.normpath(os.path.join(current_directory, "../Data/UpVideoTest/"))
 
 def adjust_exposure(frame):
     global exposure
@@ -146,10 +147,24 @@ class VideoProcessor(QMainWindow):
         if is_frame_reset:
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
             # is_frame_reset = False
-        processed_frame = apply_adjustments(frame)
 
-        original_image = self.convert_to_qt_image(frame)
-        processed_image = self.convert_to_qt_image(processed_frame)
+        if not do_nn_first:
+            processed_frame = apply_adjustments(frame)
+            if use_nn_upscaling:
+                processed_frame = self.apply_nn_upscaling(processed_frame)
+
+            original_image = self.convert_to_qt_image(frame)
+            processed_image = self.convert_to_qt_image(processed_frame)
+        else:
+            if use_nn_upscaling:
+                processed_frame = self.apply_nn_upscaling(frame)
+                processed_frame = apply_adjustments(processed_frame)
+            else:
+                processed_frame = apply_adjustments(frame)
+
+            original_image = self.convert_to_qt_image(frame)
+            processed_image = self.convert_to_qt_image(processed_frame)
+
 
         self.original_label.setPixmap(original_image.scaled(
             self.original_label.width(), self.original_label.height(), Qt.AspectRatioMode.KeepAspectRatio))
@@ -158,8 +173,6 @@ class VideoProcessor(QMainWindow):
         self.processed_label.setPixmap(processed_image.scaled(
             self.processed_label.width(), self.processed_label.height(), Qt.AspectRatioMode.KeepAspectRatio))
 
-        if use_nn_upscaling:
-            processed_frame = self.apply_nn_upscaling(processed_frame)
 
         if do_save_frame:
             img_name = f"{current_frame}.png"
@@ -172,7 +185,7 @@ class VideoProcessor(QMainWindow):
 
     def apply_nn_upscaling(self, frame):
         global model, device
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = Image.fromarray(frame)
         frame = TF.to_tensor(frame).unsqueeze(0).to(device)
         with torch.no_grad():
@@ -233,15 +246,20 @@ class SlidersWindow(QWidget):
         self.frame_reset_slider = self.create_slider("Frame Reset", 0, total_frames-1, 0, self.update_frame_reset)
 
         # checkbox
-        self.checkbox = QCheckBox("Ally NN upscaling")
-        self.checkbox.setChecked(False)
-        self.checkbox.stateChanged.connect(self.update_use_nn_upscaling)
+        self.checkboxUpFirstNN = QCheckBox("Do Upscaling First")
+        self.checkboxUpFirstNN.setChecked(False)
+        self.checkboxUpFirstNN.stateChanged.connect(self.update_do_nn_first)
+        # checkbox
+        self.checkboxNN = QCheckBox("Apply NN upscaling")
+        self.checkboxNN.setChecked(False)
+        self.checkboxNN.stateChanged.connect(self.update_use_nn_upscaling)
         # checkbox
         self.checkbox = QCheckBox("Lock Frame to Slider")
         self.checkbox.setChecked(False)
         self.checkbox.stateChanged.connect(self.update_checkbox)
 
         layout = QVBoxLayout()
+        layout.addWidget(self.checkboxUpFirstNN)
         layout.addWidget(self.exposure_slider)
         layout.addWidget(self.brightness_slider)
         layout.addWidget(self.contrast_slider)
@@ -253,6 +271,7 @@ class SlidersWindow(QWidget):
         layout.addWidget(self.tile_grid_slider)
         layout.addWidget(self.checkbox)
         layout.addWidget(self.frame_reset_slider)
+        layout.addWidget(self.checkboxNN)
 
         self.setLayout(layout)
 
@@ -323,6 +342,10 @@ class SlidersWindow(QWidget):
     def update_use_nn_upscaling(self, state):
         global use_nn_upscaling
         use_nn_upscaling = state
+
+    def update_do_nn_first(self, state):
+        global do_nn_first
+        do_nn_first = state
         # is_frame_reset = state == Qt.CheckState.Checked
 
     def keyPressEvent(self, event):
@@ -332,15 +355,14 @@ class SlidersWindow(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
-    # video_name = "Weld_Video_2023-04-20_01-55-23_Camera01.avi.avi"
-    video_name = "low_quality2.mp4"
+    video_name = "Weld_Video_2023-04-20_01-55-23_Camera01.avi.avi"
+    # video_name = "low_quality.mp4"
     # video_name = "HighQuality.mp4"
     video_path = os.path.join(datapath, video_name)
 
     cap = cv2.VideoCapture(video_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
-
 
 
     main_window = VideoProcessor(video_path)
