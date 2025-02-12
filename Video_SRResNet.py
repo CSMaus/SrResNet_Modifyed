@@ -91,7 +91,7 @@ def apply_adjustments(frame):
 
     adjusted_hsv = cv2.merge([h, s, v])
     adjusted_frame = cv2.cvtColor(adjusted_hsv, cv2.COLOR_HSV2BGR)
-    # adjusted_frame = adjust_exposure(adjusted_frame)
+    adjusted_frame = adjust_exposure(adjusted_frame)
     return adjusted_frame
 
 
@@ -357,9 +357,9 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     # video_name = "Weld_Video_2023-04-20_01-55-23_Camera01.avi.avi"
-    # video_name = "low_quality.mp4"
+    video_name = "low_quality.mp4"
     # video_name = "HighQuality.mp4"
-    video_name = "test_video3.mp4"
+    # video_name = "test_video3.mp4"
     video_path = os.path.join(datapath, video_name)
 
     cap = cv2.VideoCapture(video_path)
