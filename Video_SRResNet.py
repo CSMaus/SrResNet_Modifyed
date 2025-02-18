@@ -11,18 +11,48 @@ import torch
 from custom_srresnet import _NetG
 from PIL import Image
 import torchvision.transforms.functional as TF
+import argparse
+from time import time
 
+current_directory = os.path.dirname(os.path.abspath(__file__))
+datapath = os.path.normpath(os.path.join(current_directory, "../../Data/Weld_VIdeo/"))
+def_video_path = os.path.join(datapath, "low_quality.mp4")
+up_ds_folder = os.path.normpath(os.path.join(current_directory, "../../Data/EnhancedDS/"))
 model_path = "model/srresnet_finetuned-BS2-EP30.pth"
+
+parser = argparse.ArgumentParser(description="CLAHE and SrResNet-based Video Processing Application. Press Esc to exit application and display processing time metrics."
+                                             "Press \"p\" while running the program to see current enhancement parameters. "
+                                             "Press \"s\" to save current enhanced frame.")
+parser.add_argument("--video_path", type=str, default=def_video_path, help="Path to the video file")
+parser.add_argument("--model_path", type=str, default=model_path, help="Path to the model checkpoints file (.pth)")
+parser.add_argument("--up_ds_folder", type=str, default=up_ds_folder, help="Folder to save enhanced upscaled frame")
+
+args = parser.parse_args()
+
+
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Use device", device)
+if torch.cuda.is_available():
+    gpu_id = torch.cuda.current_device()
+    print(f"Using GPU: {torch.cuda.get_device_name(gpu_id)}")
+    print(f"CUDA Compute Capability: {torch.cuda.get_device_capability(gpu_id)}")
+    print(f"CUDA Memory (Total): {torch.cuda.get_device_properties(gpu_id).total_memory / 1e9} GB")
+    print(f"CUDA Multiprocessors: {torch.cuda.get_device_properties(gpu_id).multi_processor_count}")
+    print(f"CUDA Cores: {torch.cuda.get_device_properties(gpu_id).multi_processor_count * 64}")
+
+
 model = _NetG().to(device)
-checkpoint = torch.load(model_path, map_location=device)
+checkpoint = torch.load(args.model_path, map_location=device)
 state_dict = checkpoint["model"] if "model" in checkpoint else checkpoint
 model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)
 model.eval()
 # model warm-up (hope it'll work if I'll run it here)
 dummy_input = torch.randn(1, 3, 924, 706).to(device)
 with torch.no_grad():
+    testt = time()
     model(dummy_input)
+    print("Model warm-up took: ", time() - testt, " sec")
 
 
 
@@ -43,17 +73,9 @@ do_save_frame = False
 use_nn_upscaling = False
 do_nn_first = False  # do NN upscaling before CLAHE
 
-current_directory = os.path.dirname(os.path.abspath(__file__))
-datapath = os.path.normpath(os.path.join(current_directory, "../Data/Weld_VIdeo/"))
-up_ds_folder = os.path.normpath(os.path.join(current_directory, "../Data/UpVideoTest/"))
 
 def adjust_exposure(frame):
     global exposure
-    """
-    Apply exposure correction using gamma correction.
-    exposure > 1.0 -> brighter
-    exposure < 1.0 -> darker
-    """
     gamma = 1.0 / exposure  # Inverse for OpenCV gamma correction
     lookup_table = np.array([((i / 255.0) ** gamma) * 255 for i in range(256)]).astype("uint8")
     return cv2.LUT(frame, lookup_table)
@@ -93,19 +115,6 @@ def apply_adjustments(frame):
     adjusted_frame = cv2.cvtColor(adjusted_hsv, cv2.COLOR_HSV2BGR)
     adjusted_frame = adjust_exposure(adjusted_frame)
     return adjusted_frame
-
-
-def crop_frame(frame, left_crop=80, right_crop=80, top_crop=0, bottom_crop=0):
-    h, w = frame.shape[:2]
-    left = int(left_crop)
-    right = int(w - right_crop)
-    top = int(top_crop)
-    bottom = int(h - bottom_crop)
-    return frame[top:bottom, left:right]
-
-
-def downscale_frame(frame, scale_coef=4):
-    return cv2.resize(frame, (0, 0), fx=1/scale_coef, fy=1/scale_coef, interpolation=cv2.INTER_AREA)
 
 
 
@@ -176,12 +185,15 @@ class VideoProcessor(QMainWindow):
 
 
         if do_save_frame:
+            if not os.path.exists(up_ds_folder):
+                os.makedirs(up_ds_folder)
             img_name = f"{current_frame}.png"
             img_name_up = f"up_{current_frame:06d}.png"
             save_path = os.path.join(up_ds_folder, img_name)
             cv2.imwrite(save_path, frame)
             cv2.imwrite(os.path.join(up_ds_folder, img_name_up), processed_frame)
             print(f"Processed image saved at: {save_path}")
+            sys.stdout.flush()
             do_save_frame = False
 
     def apply_nn_upscaling(self, frame):
@@ -215,7 +227,6 @@ class VideoProcessor(QMainWindow):
             # cv2.imwrite(save_path, self.processed_frame)
             # print(f"Processed image saved at: {save_path}")
             do_save_frame = True
-            print("TODO: define the path and name for saving frames")
         elif event.key() == Qt.Key.Key_P:
             print("\nCurrent Parameters:")
             print("Exposure: ", exposure)
@@ -227,6 +238,7 @@ class VideoProcessor(QMainWindow):
             print("Lightness: ", lightness)
             print("Clip Limit: ", clip_limit)
             print("Tile Grid Size: ", tile_grid_size)
+            sys.stdout.flush()
 
 class SlidersWindow(QWidget):
     frame_reset_signal = pyqtSignal(int)
@@ -357,11 +369,12 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     # video_name = "Weld_Video_2023-04-20_01-55-23_Camera01.avi.avi"
-    video_name = "low_quality.mp4"
+    # video_name = "low_quality.mp4"
     # video_name = "HighQuality.mp4"
     # video_name = "test_video3.mp4"
-    video_path = os.path.join(datapath, video_name)
-
+    # video_path = os.path.join(datapath, video_name)
+    video_path = args.video_path
+    up_ds_folder = args.up_ds_folder
     cap = cv2.VideoCapture(video_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()

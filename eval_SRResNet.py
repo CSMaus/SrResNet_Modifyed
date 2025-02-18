@@ -33,11 +33,6 @@ model = _NetG()
 
 checkpoint = torch.load(model_path, map_location=device)
 state_dict = checkpoint["model"] if "model" in checkpoint else checkpoint
-'''
-if "model" in checkpoint:
-    state_dict = checkpoint["model"].state_dict()
-else:
-    state_dict = checkpoint'''
 
 filtered_state_dict = {k: v for k, v in state_dict.items() if k in model.state_dict()}
 
