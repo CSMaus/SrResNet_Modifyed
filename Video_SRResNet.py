@@ -15,9 +15,11 @@ import argparse
 from time import time
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
-datapath = os.path.normpath(os.path.join(current_directory, "../../Data/Weld_VIdeo/"))
-def_video_path = os.path.join(datapath, "low_quality.mp4")
-up_ds_folder = os.path.normpath(os.path.join(current_directory, "../../Data/EnhancedDS/"))
+datapath = os.path.normpath(os.path.join(current_directory))  # , "../../Data/Weld_VIdeo/"))
+# def_video_path = os.path.join(datapath, "low_quality.mp4")
+def_video_path = os.path.join(datapath, "vid_426_240_18fps.mp4")
+# up_ds_folder = os.path.normpath(os.path.join(current_directory, "../../Data/EnhancedDS/"))
+up_ds_folder = os.path.normpath(os.path.join(current_directory, "EnhancedVid/"))
 model_path = "model/srresnet_finetuned-BS2-EP30.pth"
 
 parser = argparse.ArgumentParser(description="CLAHE and SrResNet-based Video Processing Application. Press Esc to exit application and display processing time metrics."
@@ -47,8 +49,15 @@ checkpoint = torch.load(args.model_path, map_location=device)
 state_dict = checkpoint["model"] if "model" in checkpoint else checkpoint
 model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()}, strict=False)
 model.eval()
-# model warm-up (hope it'll work if I'll run it here)
-dummy_input = torch.randn(1, 3, 924, 706).to(device)
+
+# Memory optimization settings
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.deterministic = True
+if device.type == 'cpu':
+    torch.set_num_threads(2)  # Limit CPU threads to reduce memory usage
+
+# model warm-up (hope it'll work if I'll run it here) - using smaller size to avoid memory issues
+dummy_input = torch.randn(1, 3, 240, 240).to(device)
 with torch.no_grad():
     testt = time()
     model(dummy_input)
@@ -205,9 +214,16 @@ class VideoProcessor(QMainWindow):
             output_tensor = model(frame)
             output_tensor = output_tensor.squeeze(0).mul(255).clamp(0, 255).byte()
             output_tensor = output_tensor.permute(1, 2, 0)
-            torch.cuda.synchronize()
+            if device.type == 'cuda':
+                torch.cuda.synchronize()
             # output_tensor = output_tensor.to(torch.half)
         out_frame = output_tensor.cpu().numpy()
+        
+        # Clean up GPU memory
+        del frame, output_tensor
+        if device.type == 'cuda':
+            torch.cuda.empty_cache()
+        
         # out_frame = cv2.cvtColor(out_frame, cv2.COLOR_RGB2BGR)
         return out_frame
 
