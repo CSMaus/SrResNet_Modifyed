@@ -37,6 +37,12 @@ model.eval()
 # Memory optimization for CPU
 if device.type == 'cpu':
     torch.set_num_threads(2)
+else:
+    # Optimize CUDA memory allocation
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = False
+    # Use memory pool to reduce allocation overhead
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
 
 print("Model loaded successfully!")
 
@@ -184,10 +190,10 @@ class SimpleVideoProcessor(QMainWindow):
         cleanup_start = time()
         output_frame = cv2.cvtColor(output_frame, cv2.COLOR_RGB2BGR)
         
-        # Clean up memory - less aggressive approach
+        # Minimal memory cleanup - only delete references
         del input_tensor, output_tensor
-        # Only clear cache every 10 frames to reduce overhead
-        if device.type == 'cuda' and frame_count % 10 == 0:
+        # Clear cache much less frequently to reduce sync overhead
+        if device.type == 'cuda' and frame_count % 50 == 0:
             torch.cuda.empty_cache()
         times['memory_cleanup'] = time() - cleanup_start
         
