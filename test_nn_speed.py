@@ -184,9 +184,10 @@ class SimpleVideoProcessor(QMainWindow):
         cleanup_start = time()
         output_frame = cv2.cvtColor(output_frame, cv2.COLOR_RGB2BGR)
         
-        # Clean up memory
+        # Clean up memory - less aggressive approach
         del input_tensor, output_tensor
-        if device.type == 'cuda':
+        # Only clear cache every 10 frames to reduce overhead
+        if device.type == 'cuda' and frame_count % 10 == 0:
             torch.cuda.empty_cache()
         times['memory_cleanup'] = time() - cleanup_start
         
