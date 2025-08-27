@@ -45,6 +45,17 @@ frame_count = 0
 total_nn_time = 0
 start_time = time()
 
+# Detailed timing accumulators
+total_times = {
+    'preprocessing': 0.0,
+    'to_device': 0.0,
+    'nn_inference': 0.0,
+    'cuda_sync': 0.0,
+    'postprocessing': 0.0,
+    'to_cpu': 0.0,
+    'memory_cleanup': 0.0
+}
+
 class SimpleVideoProcessor(QMainWindow):
     def __init__(self, video_path):
         super().__init__()
@@ -88,7 +99,7 @@ class SimpleVideoProcessor(QMainWindow):
         self.timer.start(33)  # ~30 FPS
         
     def update_frame(self):
-        global frame_count, total_nn_time
+        global frame_count, total_nn_time, total_times
         
         ret, frame = self.cap.read()
         if not ret:
@@ -100,11 +111,15 @@ class SimpleVideoProcessor(QMainWindow):
         
         frame_count += 1
         
-        # Apply NN upscaling and measure time
+        # Apply NN upscaling and measure detailed timing
         nn_start = time()
-        upscaled_frame = self.apply_nn_upscaling(frame)
+        upscaled_frame, frame_times = self.apply_nn_upscaling_detailed(frame)
         nn_time = time() - nn_start
         total_nn_time += nn_time
+        
+        # Accumulate detailed times
+        for key, value in frame_times.items():
+            total_times[key] += value
         
         # Convert to Qt images
         original_image = self.convert_to_qt_image(frame)
@@ -120,31 +135,62 @@ class SimpleVideoProcessor(QMainWindow):
         if frame_count % 10 == 0:  # Update every 10 frames
             avg_nn_time = total_nn_time / frame_count
             effective_fps = 1.0 / avg_nn_time if avg_nn_time > 0 else 0
-            self.setWindowTitle(f"NN Speed Test - Frame {frame_count} | Avg NN Time: {avg_nn_time:.3f}s | Effective FPS: {effective_fps:.1f}")
+            avg_inference = total_times['nn_inference'] / frame_count
+            self.setWindowTitle(f"NN Speed Test - Frame {frame_count} | Total: {avg_nn_time:.3f}s | NN: {avg_inference:.3f}s | FPS: {effective_fps:.1f}")
     
-    def apply_nn_upscaling(self, frame):
+    def apply_nn_upscaling_detailed(self, frame):
         global model, device
         
-        # Convert frame to tensor
-        pil_frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        input_tensor = TF.to_tensor(pil_frame).unsqueeze(0).to(device)
+        times = {}
         
-        # Apply model
+        # Step 1: Preprocessing (BGR to RGB, PIL conversion, tensor conversion)
+        preprocess_start = time()
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pil_frame = Image.fromarray(rgb_frame)
+        input_tensor = TF.to_tensor(pil_frame).unsqueeze(0)
+        times['preprocessing'] = time() - preprocess_start
+        
+        # Step 2: Transfer to device
+        to_device_start = time()
+        input_tensor = input_tensor.to(device)
+        if device.type == 'cuda':
+            torch.cuda.synchronize()
+        times['to_device'] = time() - to_device_start
+        
+        # Step 3: NN Inference
+        inference_start = time()
         with torch.no_grad():
             output_tensor = model(input_tensor)
-            output_tensor = output_tensor.squeeze(0).mul(255).clamp(0, 255).byte()
-            output_tensor = output_tensor.permute(1, 2, 0)
+        times['nn_inference'] = time() - inference_start
         
-        # Convert back to numpy array
+        # Step 4: CUDA synchronization (if using GPU)
+        sync_start = time()
+        if device.type == 'cuda':
+            torch.cuda.synchronize()
+        times['cuda_sync'] = time() - sync_start
+        
+        # Step 5: Postprocessing (tensor operations)
+        postprocess_start = time()
+        output_tensor = output_tensor.squeeze(0).mul(255).clamp(0, 255).byte()
+        output_tensor = output_tensor.permute(1, 2, 0)
+        times['postprocessing'] = time() - postprocess_start
+        
+        # Step 6: Transfer to CPU
+        to_cpu_start = time()
         output_frame = output_tensor.cpu().numpy()
+        times['to_cpu'] = time() - to_cpu_start
+        
+        # Step 7: Final conversion and memory cleanup
+        cleanup_start = time()
         output_frame = cv2.cvtColor(output_frame, cv2.COLOR_RGB2BGR)
         
         # Clean up memory
         del input_tensor, output_tensor
         if device.type == 'cuda':
             torch.cuda.empty_cache()
-            
-        return output_frame
+        times['memory_cleanup'] = time() - cleanup_start
+        
+        return output_frame, times
     
     def convert_to_qt_image(self, cv_image):
         rgb_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
@@ -159,23 +205,42 @@ class SimpleVideoProcessor(QMainWindow):
             QApplication.quit()
     
     def print_stats(self):
-        global frame_count, total_nn_time, start_time
+        global frame_count, total_nn_time, start_time, total_times
         
         total_time = time() - start_time
         avg_nn_time = total_nn_time / frame_count if frame_count > 0 else 0
         effective_fps = 1.0 / avg_nn_time if avg_nn_time > 0 else 0
         overall_fps = frame_count / total_time if total_time > 0 else 0
         
-        print("\n" + "="*50)
-        print("PERFORMANCE STATISTICS")
-        print("="*50)
+        # Calculate average times for each step
+        avg_times = {key: total_times[key] / frame_count for key in total_times.keys()}
+        
+        print("\n" + "="*60)
+        print("DETAILED PERFORMANCE STATISTICS")
+        print("="*60)
         print(f"Total frames processed: {frame_count}")
         print(f"Total runtime: {total_time:.2f} seconds")
         print(f"Overall FPS: {overall_fps:.2f}")
-        print(f"Average NN processing time: {avg_nn_time:.3f} seconds")
+        print(f"Average total NN time: {avg_nn_time:.3f} seconds")
         print(f"Effective NN FPS: {effective_fps:.2f}")
         print(f"NN processing overhead: {(avg_nn_time / (1/30) * 100):.1f}% of 30fps budget")
-        print("="*50)
+        print()
+        print("DETAILED TIMING BREAKDOWN (average per frame):")
+        print(f"  1. Preprocessing:       {avg_times['preprocessing']*1000:8.3f} ms")
+        print(f"  2. Transfer to device:  {avg_times['to_device']*1000:8.3f} ms")
+        print(f"  3. NN Inference:        {avg_times['nn_inference']*1000:8.3f} ms")
+        print(f"  4. CUDA Synchronization:{avg_times['cuda_sync']*1000:8.3f} ms")
+        print(f"  5. Postprocessing:      {avg_times['postprocessing']*1000:8.3f} ms")
+        print(f"  6. Transfer to CPU:     {avg_times['to_cpu']*1000:8.3f} ms")
+        print(f"  7. Memory cleanup:      {avg_times['memory_cleanup']*1000:8.3f} ms")
+        print(f"     TOTAL:               {avg_nn_time*1000:8.3f} ms")
+        print()
+        print("PERFORMANCE ANALYSIS:")
+        bottleneck = max(avg_times.items(), key=lambda x: x[1])
+        print(f"  Bottleneck step: {bottleneck[0]} ({bottleneck[1]*1000:.3f} ms)")
+        print(f"  NN inference ratio: {(avg_times['nn_inference']/avg_nn_time*100):.1f}% of total time")
+        print(f"  Data transfer ratio: {((avg_times['to_device']+avg_times['to_cpu'])/avg_nn_time*100):.1f}% of total time")
+        print("="*60)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
